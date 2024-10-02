@@ -14,13 +14,27 @@ import { IPTokenSlashing } from "../src/protocol/IPTokenSlashing.sol";
  * @title DeployIPTokenSlashing
  * @dev A script to deploy IPTokenSlashing for Illiad
  */
+
+// == Logs ==
+//   deployer 0x13919a0d8603c35DAC923f92D7E4e1D55e993898
+//   IPTokenSlashing will be deployed at: 0xEEf1c4fD443965404f13BE2705766988317b3B32
+//   IP_TOKEN_STAKING 0xCCcCcC0000000000000000000000000000000001
+//   IPTokenSlashing deployed at: 0xEEf1c4fD443965404f13BE2705766988317b3B32
 contract DeployIPTokenSlashing is Script {
     // To run the script:
+    // mininet v4 "http://18.144.99.223:8545
+
+    // dev
+    // const RPC_URL = "http://18.144.89.70:8545";
+
+    // export ADMIN_ADDRESS=0x70997970C51812dc3A010C7d01b50e0d17dc79C8 
+    // export IPTOKENSTAKING_DEPLOYER_KEY=0x45813784c38bb79693e587efc8b754ca12e04552358855cc02f069da9c11b79c
+    
     // - Dry run
-    // forge script script/DeployIPTokenSlashing.s.sol --fork-url <fork-url>
+    // forge script script/DeployIPTokenSlashing.s.sol --fork-url http://18.144.99.223:8545
     //
     // - Deploy (OK for devnet)
-    // forge script script/DeployIPTokenSlashing.s.sol --fork-url <fork-url> --broadcast
+    // forge script script/DeployIPTokenSlashing.s.sol --fork-url http://54.215.121.164:8545 --broadcast
     //
     // - Deploy and Verify (for testnet)
     // forge script script/DeployIPTokenSlashing.s.sol --fork-url https://testnet.storyrpc.io --broadcast --verify --verifier blockscout --verifier-url https://testnet.storyscan.xyz/api\?

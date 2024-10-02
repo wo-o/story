@@ -7,6 +7,7 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils
 import { IIPTokenSlashing } from "../interfaces/IIPTokenSlashing.sol";
 import { IPTokenStaking } from "./IPTokenStaking.sol";
 import { Secp256k1 } from "../libraries/Secp256k1.sol";
+import "forge-std/Script.sol";
 
 /**
  * @title IPTokenSlashing
@@ -32,6 +33,7 @@ contract IPTokenSlashing is IIPTokenSlashing, Ownable2StepUpgradeable, UUPSUpgra
         __Ownable_init(accessManager);
         require(newUnjailFee > 0, "IPTokenSlashing: Invalid unjail fee");
         unjailFee = newUnjailFee;
+        console2.log("Unjail fee set to:", unjailFee);
         emit UnjailFeeSet(newUnjailFee);
     }
 
@@ -66,6 +68,8 @@ contract IPTokenSlashing is IIPTokenSlashing, Ownable2StepUpgradeable, UUPSUpgra
     function unjail(
         bytes calldata validatorUncmpPubkey
     ) external payable verifyUncmpPubkeyWithExpectedAddress(validatorUncmpPubkey, msg.sender) {
+        console2.log("Expected unjail fee:", unjailFee);
+        console2.log("Received value:", msg.value);
         bytes memory validatorCmpPubkey = Secp256k1.compressPublicKey(validatorUncmpPubkey);
         _verifyExistingValidator(validatorCmpPubkey);
         _unjail(validatorCmpPubkey);
