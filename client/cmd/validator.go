@@ -89,7 +89,7 @@ var contracts = map[ContractType]ContractInfo{
 		ABI:        ipTokenStakingABI,
 	},
 	SLASHING: {
-		AddressHex: predeploys.IPTokenSlashing,
+		AddressHex: "0xa39241Eb9Ff830178339D1E6aD38EfB160Ee9ab1",
 		ABI:        ipTokenSlashingABI,
 	},
 }
