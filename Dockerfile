@@ -2,7 +2,6 @@
 ARG COMMIT=""
 ARG VERSION=""
 ARG BUILDNUM=""
-ARG NETWORK=""
 
 # Build Geth in a stock Go builder container
 FROM golang:1.22-alpine as builder
@@ -27,12 +26,11 @@ COPY --from=builder /story/story /usr/local/bin/
 
 EXPOSE 8545 8546 30303 30303/udp
 
-RUN story init --network iliad
-ENTRYPOINT ["story", "run"]
+ENTRYPOINT ["/bin/sh", "-c", "rm -rf ~/.story/story/* && story init --network $NETWORK && exec story run"]
 
 # Add some metadata labels to help programmatic image consumption
 ARG COMMIT=""
 ARG VERSION=""
 ARG BUILDNUM=""
 
-LABEL commit="$COMMIT" version="$VERSION" buildnum="$BUILDNUM"
+LABEL commit="$COMMIT" version="$VERSION" buildnum="$BUILDNUM" network="$NETWORK"
