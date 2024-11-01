@@ -17,7 +17,7 @@ jobs:
 
       - name: Set build arguments
         run: |
-          echo "REPOSITORY_URI=${{ env.DOCKERHUB_REPOSITORY }}" >> $GITHUB_ENV
+          echo "REPOSITORY_URI=${{ vars.DOCKERHUB_REPOSITORY }}" >> $GITHUB_ENV
           echo "COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
           echo "VERSION=$(git describe --tags --abbrev=0)" >> $GITHUB_ENV
           echo "BUILDNUM=${{ github.run_number }}" >> $GITHUB_ENV
