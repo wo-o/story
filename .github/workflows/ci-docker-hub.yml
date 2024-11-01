@@ -7,7 +7,7 @@ on:
       - '*'
 
 env:
-  DOCKERHUB_REPOSITORY: jinnuae40/story
+  DOCKERHUB_REPOSITORY: ${{ env.DOCKERHUB_REPOSITORY }}
 
 jobs:
   # Build and upload the geth binary
