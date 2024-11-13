@@ -1,8 +1,3 @@
-# Support setting various labels on the final image
-ARG COMMIT=""
-ARG VERSION=""
-ARG BUILDNUM=""
-
 # Build Geth in a stock Go builder container
 FROM golang:1.22-alpine as builder
 
@@ -28,10 +23,3 @@ EXPOSE 8545 8546 30303 30303/udp
 
 WORKDIR /root/.story/story
 ENTRYPOINT ["/bin/sh", "-c", "story init --network ${NETWORK} && exec story run \"$@\"", "--"]
-
-# Add some metadata labels to help programmatic image consumption
-ARG COMMIT=""
-ARG VERSION=""
-ARG BUILDNUM=""
-
-LABEL commit="$COMMIT" version="$VERSION" buildnum="$BUILDNUM" network="$NETWORK"

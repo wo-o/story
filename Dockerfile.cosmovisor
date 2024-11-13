@@ -1,0 +1,78 @@
+# Stage 1: Build the 'story' genesis binary (v0.12.0) and Cosmovisor
+FROM golang:1.22-alpine AS builder_genesis
+
+# Install necessary packages
+RUN apk add --no-cache git
+
+# Set the working directory
+WORKDIR /go/src/github.com/piplabs/story
+
+# Clone the 'story' repository
+RUN git clone https://github.com/piplabs/story.git .
+
+# Checkout v0.12.0
+RUN git checkout tags/v0.12.0
+
+# Build the 'story' genesis binary
+RUN go build -o story-genesis ./client
+
+# Install Cosmovisor
+RUN go install cosmossdk.io/tools/cosmovisor/cmd/cosmovisor@v1.6.0
+
+# Stage 2: Build the 'story' upgrade binary (v0.12.1)
+FROM golang:1.22-alpine AS builder_upgrade
+
+# Install necessary packages
+RUN apk add --no-cache git
+
+# Set the working directory
+WORKDIR /go/src/github.com/piplabs/story
+
+# Clone the 'story' repository
+RUN git clone https://github.com/piplabs/story.git .
+
+# Checkout v0.12.1
+RUN git checkout tags/v0.12.1
+
+# Build the 'story' upgrade binary
+RUN go build -o story-upgrade ./client
+
+# Final Stage: Create the image with Cosmovisor and 'story'
+FROM alpine:latest
+
+# Install necessary packages
+RUN apk add --no-cache ca-certificates bash
+
+# Set environment variables for Cosmovisor
+ENV DAEMON_NAME=story
+ENV DAEMON_HOME=/root/.story/story
+ENV DAEMON_ALLOW_DOWNLOAD_BINARIES=false
+ENV DAEMON_RESTART_AFTER_UPGRADE=true
+ENV DAEMON_DATA_BACKUP_DIR=$DAEMON_HOME/cosmovisor/backup
+
+# Create necessary directories
+RUN mkdir -p $DAEMON_HOME/cosmovisor/genesis/bin \
+  && mkdir -p $DAEMON_HOME/cosmovisor/upgrades/v0.12.1/bin \
+  && mkdir -p $DAEMON_HOME/data \
+  && mkdir -p $DAEMON_HOME/cosmovisor/backup
+
+# Copy the 'story' genesis binary
+COPY --from=builder_genesis /go/src/github.com/piplabs/story/story-genesis $DAEMON_HOME/cosmovisor/genesis/bin/story
+
+# Copy the Cosmovisor binary
+COPY --from=builder_genesis /go/bin/cosmovisor /usr/local/bin/cosmovisor
+
+# Ensure Cosmovisor is executable
+RUN chmod +x /usr/local/bin/cosmovisor
+
+# Copy the 'story' upgrade binary
+COPY --from=builder_upgrade /go/src/github.com/piplabs/story/story-upgrade $DAEMON_HOME/cosmovisor/upgrades/v0.12.1/bin/story
+
+# Create the 'upgrade-info.json' file with the provided content
+RUN echo '{"name":"v0.12.1","time":"0001-01-01T00:00:00Z","height":322000}' > $DAEMON_HOME/cosmovisor/upgrades/v0.12.1/upgrade-info.json
+
+# Expose necessary ports
+EXPOSE 8545 8546 30303 30303/udp
+
+# Set the working directory
+WORKDIR $DAEMON_HOME
