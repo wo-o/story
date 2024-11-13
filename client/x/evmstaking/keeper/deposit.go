@@ -1,3 +1,4 @@
+//nolint:contextcheck // use cached context
 package keeper
 
 import (
@@ -18,23 +19,27 @@ import (
 )
 
 func (k Keeper) ProcessDeposit(ctx context.Context, ev *bindings.IPTokenStakingDeposit) (err error) {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	cachedCtx, writeCache := sdkCtx.CacheContext()
+
 	defer func() {
-		sdkCtx := sdk.UnwrapSDKContext(ctx)
-		if err != nil {
-			sdkCtx.EventManager().EmitEvents(sdk.Events{
-				sdk.NewEvent(
-					types.EventTypeDelegateFailure,
-					sdk.NewAttribute(types.AttributeKeyBlockHeight, strconv.FormatInt(sdkCtx.BlockHeight(), 10)),
-					sdk.NewAttribute(types.AttributeKeyDelegatorUncmpPubKey, hex.EncodeToString(ev.DelegatorUncmpPubkey)),
-					sdk.NewAttribute(types.AttributeKeyValidatorUncmpPubKey, hex.EncodeToString(ev.ValidatorUncmpPubkey)),
-					sdk.NewAttribute(types.AttributeKeyDelegateID, ev.DelegationId.String()),
-					sdk.NewAttribute(types.AttributeKeyPeriodType, strconv.FormatInt(ev.StakingPeriod.Int64(), 10)),
-					sdk.NewAttribute(types.AttributeKeyAmount, ev.StakeAmount.String()),
-					sdk.NewAttribute(types.AttributeKeySenderAddress, ev.OperatorAddress.Hex()),
-					sdk.NewAttribute(types.AttributeKeyStatusCode, errors.UnwrapErrCode(err).String()),
-				),
-			})
+		if err == nil {
+			writeCache()
+			return
 		}
+		sdkCtx.EventManager().EmitEvents(sdk.Events{
+			sdk.NewEvent(
+				types.EventTypeDelegateFailure,
+				sdk.NewAttribute(types.AttributeKeyBlockHeight, strconv.FormatInt(sdkCtx.BlockHeight(), 10)),
+				sdk.NewAttribute(types.AttributeKeyDelegatorUncmpPubKey, hex.EncodeToString(ev.DelegatorUncmpPubkey)),
+				sdk.NewAttribute(types.AttributeKeyValidatorUncmpPubKey, hex.EncodeToString(ev.ValidatorUncmpPubkey)),
+				sdk.NewAttribute(types.AttributeKeyDelegateID, ev.DelegationId.String()),
+				sdk.NewAttribute(types.AttributeKeyPeriodType, strconv.FormatInt(ev.StakingPeriod.Int64(), 10)),
+				sdk.NewAttribute(types.AttributeKeyAmount, ev.StakeAmount.String()),
+				sdk.NewAttribute(types.AttributeKeySenderAddress, ev.OperatorAddress.Hex()),
+				sdk.NewAttribute(types.AttributeKeyStatusCode, errors.UnwrapErrCode(err).String()),
+			),
+		})
 	}()
 
 	delCmpPubkey, err := UncmpPubKeyToCmpPubKey(ev.DelegatorUncmpPubkey)
@@ -70,24 +75,16 @@ func (k Keeper) ProcessDeposit(ctx context.Context, ev *bindings.IPTokenStakingD
 	amountCoin, amountCoins := IPTokenToBondCoin(ev.StakeAmount)
 
 	// Create account if not exists
-	if !k.authKeeper.HasAccount(ctx, depositorAddr) {
-		acc := k.authKeeper.NewAccountWithAddress(ctx, depositorAddr)
-		k.authKeeper.SetAccount(ctx, acc)
-		log.Debug(ctx, "Created account for depositor",
+	if !k.authKeeper.HasAccount(cachedCtx, depositorAddr) {
+		acc := k.authKeeper.NewAccountWithAddress(cachedCtx, depositorAddr)
+		k.authKeeper.SetAccount(cachedCtx, acc)
+		log.Debug(cachedCtx, "Created account for depositor",
 			"address", depositorAddr.String(),
 			"evm_address", delEvmAddr.String(),
 		)
 	}
 
-	if err := k.bankKeeper.MintCoins(ctx, types.ModuleName, amountCoins); err != nil {
-		return errors.Wrap(err, "create stake coin for depositor: mint coins")
-	}
-
-	if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, depositorAddr, amountCoins); err != nil {
-		return errors.Wrap(err, "create stake coin for depositor: send coins")
-	}
-
-	log.Debug(ctx, "EVM staking deposit detected, delegating to validator",
+	log.Debug(cachedCtx, "EVM staking deposit detected, delegating to validator",
 		"del_story", depositorAddr.String(),
 		"val_story", validatorAddr.String(),
 		"del_evm_addr", delEvmAddr.String(),
@@ -95,34 +92,24 @@ func (k Keeper) ProcessDeposit(ctx context.Context, ev *bindings.IPTokenStakingD
 		"amount_coin", amountCoin.String(),
 	)
 
-	// Note that, after minting, we save the mapping between delegator bech32 address and evm address, which will be used in the withdrawal queue.
-	// The saving is done regardless of any error below, as the money is already minted and sent to the delegator, who can withdraw the minted amount.
-	// TODO: Confirm that bech32 address and evm address can be used interchangeably. Must be one-to-one or many-bech32-to-one-evm.
-	if err := k.DelegatorWithdrawAddress.Set(ctx, depositorAddr.String(), delEvmAddr.String()); err != nil {
-		return errors.Wrap(err, "set delegator withdraw address map")
-	}
-	if err := k.DelegatorRewardAddress.Set(ctx, depositorAddr.String(), delEvmAddr.String()); err != nil {
-		return errors.Wrap(err, "set delegator reward address map")
-	}
-
 	delID := ev.DelegationId.String()
 	periodType := int32(ev.StakingPeriod.Int64())
 
-	val, err := k.stakingKeeper.GetValidator(ctx, validatorAddr)
+	val, err := k.stakingKeeper.GetValidator(cachedCtx, validatorAddr)
 	if errors.Is(err, stypes.ErrNoValidatorFound) {
 		return errors.WrapErrWithCode(errors.ValidatorNotFound, errors.New("validator not exists"))
 	} else if err != nil {
 		return errors.Wrap(err, "get validator failed")
 	}
 
-	lockedTokenType, err := k.stakingKeeper.GetLockedTokenType(ctx)
+	lockedTokenType, err := k.stakingKeeper.GetLockedTokenType(cachedCtx)
 	if err != nil {
 		return errors.Wrap(err, "get locked token type")
 	}
 
 	// locked tokens can only be staked with flexible period
 	if val.SupportTokenType == lockedTokenType {
-		flexPeriodType, err := k.stakingKeeper.GetFlexiblePeriodType(ctx)
+		flexPeriodType, err := k.stakingKeeper.GetFlexiblePeriodType(cachedCtx)
 		if err != nil {
 			return errors.Wrap(err, "get flexible period type")
 		}
@@ -135,14 +122,41 @@ func (k Keeper) ProcessDeposit(ctx context.Context, ev *bindings.IPTokenStakingD
 	if !ok {
 		return errors.New("type assertion failed")
 	}
+
+	// Note that, after minting, we save the mapping between delegator bech32 address and evm address, which will be used in the withdrawal queue.
+	// The saving is done regardless of any error below, as the money is already minted and sent to the delegator, who can withdraw the minted amount.
+	// TODO: Confirm that bech32 address and evm address can be used interchangeably. Must be one-to-one or many-bech32-to-one-evm.
+	// NOTE: Do not overwrite the existing withdraw/reward address set by the delegator.
+	if exists, err := k.DelegatorWithdrawAddress.Has(cachedCtx, depositorAddr.String()); err != nil {
+		return errors.Wrap(err, "check delegator withdraw address existence")
+	} else if !exists {
+		if err := k.DelegatorWithdrawAddress.Set(cachedCtx, depositorAddr.String(), delEvmAddr.String()); err != nil {
+			return errors.Wrap(err, "set delegator withdraw address map")
+		}
+	}
+	if exists, err := k.DelegatorRewardAddress.Has(cachedCtx, depositorAddr.String()); err != nil {
+		return errors.Wrap(err, "check delegator reward address existence")
+	} else if !exists {
+		if err := k.DelegatorRewardAddress.Set(cachedCtx, depositorAddr.String(), delEvmAddr.String()); err != nil {
+			return errors.Wrap(err, "set delegator reward address map")
+		}
+	}
+
+	if err := k.bankKeeper.MintCoins(cachedCtx, types.ModuleName, amountCoins); err != nil {
+		return errors.Wrap(err, "create stake coin for depositor: mint coins")
+	}
+
+	if err := k.bankKeeper.SendCoinsFromModuleToAccount(cachedCtx, types.ModuleName, depositorAddr, amountCoins); err != nil {
+		return errors.Wrap(err, "create stake coin for depositor: send coins")
+	}
+
 	skeeperMsgServer := skeeper.NewMsgServerImpl(evmstakingSKeeper)
 	// Delegation by the depositor on the validator (validator existence is checked in msgServer.Delegate)
 	msg := stypes.NewMsgDelegate(
 		depositorAddr.String(), validatorAddr.String(), amountCoin,
 		delID, periodType,
 	)
-	_, err = skeeperMsgServer.Delegate(ctx, msg)
-	if errors.Is(err, stypes.ErrDelegationBelowMinimum) {
+	if _, err = skeeperMsgServer.Delegate(cachedCtx, msg); errors.Is(err, stypes.ErrDelegationBelowMinimum) {
 		return errors.WrapErrWithCode(errors.InvalidDelegationAmount, err)
 	} else if errors.Is(err, stypes.ErrNoPeriodTypeFound) {
 		return errors.WrapErrWithCode(errors.InvalidPeriodType, err)
